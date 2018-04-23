@@ -1,3 +1,7 @@
+//! Simple test utility to panic when spawned threads are blocked too long.
+
+#![deny(missing_docs)]
+
 use std::thread::{self, ThreadId, JoinHandle};
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::time::Duration;
@@ -5,6 +9,24 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Drop;
 
+/// Examples
+///
+/// ```
+/// # extern crate shutter_gate;
+/// # use shutter_gate::Shutter;
+/// use std::thread;
+/// use std::time::Duration;
+///
+/// #[test]
+/// fn test_func() {
+///   let shutter = Shutter::new();
+///
+///   shutter.spawn(|| println!("testing"));
+///   shutter.spawn(|| thread::sleep(Duration::from_millis(300)));
+///
+///   shutter.timeout(Duration::from_millis(500));
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Shutter {
     sender: Sender<ThreadId>,
@@ -23,6 +45,7 @@ impl Drop for Guard {
 }
 
 impl Shutter {
+    /// Create a shutter.
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
 
@@ -33,6 +56,7 @@ impl Shutter {
         }
     }
 
+    /// Spawn a thread and track it.
     pub fn spawn<F, T>(&self, f: F) -> JoinHandle<T> where
         F: FnOnce() -> T,
         F: Send + 'static,
@@ -50,6 +74,13 @@ impl Shutter {
         handle
     }
 
+    /// Ensure every spawned threads are not blocked after given duration.
+    ///
+    /// Returns early if every spawned threads are terminated.
+    ///
+    /// # Panics
+    ///
+    /// It panics after given duration if at least one thread spawned by this shutter is blocked.
     pub fn timeout(&self, dur: Duration) {
         let sender = self.sender.clone();
 
